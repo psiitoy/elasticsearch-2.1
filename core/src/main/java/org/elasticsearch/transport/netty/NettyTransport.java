@@ -780,6 +780,7 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
     @Override
     public void sendRequest(final DiscoveryNode node, final long requestId, final String action, final TransportRequest request, TransportRequestOptions options) throws IOException, TransportException {
 
+        // 拿到一个连接
         Channel targetChannel = nodeChannel(node, options);
 
         if (compress) {
@@ -830,6 +831,8 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
                 buffer = bytes.toChannelBuffer();
             }
             NettyHeader.writeHeader(buffer, requestId, status, version);
+
+            // 通过拿到的连接写数据
             ChannelFuture future = targetChannel.write(buffer);
             ReleaseChannelFutureListener listener = new ReleaseChannelFutureListener(bytes);
             future.addListener(listener);
@@ -876,9 +879,17 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
                     return;
                 }
                 try {
+                    // 如果是light则创建轻连接，也就是，否则创建fully connect
                     if (light) {
                         nodeChannels = connectToChannelsLight(node);
                     } else {
+                        /**
+                         * recovery：做数据恢复recovery，默认个数2个；
+                         bulk：用于bulk请求，默认个数3个；
+                         med/reg：典型的搜索和单doc索引，默认个数6个；
+                         high:如集群state的发送等，默认个数1个；
+                         ping：就是node之间的ping咯。默认个数1个；
+                         */
                         nodeChannels = new NodeChannels(new Channel[connectionsPerNodeRecovery], new Channel[connectionsPerNodeBulk], new Channel[connectionsPerNodeReg], new Channel[connectionsPerNodeState], new Channel[connectionsPerNodePing]);
                         try {
                             connectToChannels(nodeChannels, node);

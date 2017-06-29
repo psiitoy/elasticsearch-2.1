@@ -128,7 +128,9 @@ public class Node implements Releasable {
         this(InternalSettingsPreparer.prepareEnvironment(preparedSettings, null), Version.CURRENT, Collections.<Class<? extends Plugin>>emptyList());
     }
 
+    // Node的创建
     protected Node(Environment tmpEnv, Version version, Collection<Class<? extends Plugin>> classpathPlugins) {
+        //初始化一些参数设置
         Settings tmpSettings = settingsBuilder().put(tmpEnv.settings())
             .put(Client.CLIENT_TYPE_SETTING, CLIENT_TYPE).build();
         tmpSettings = TribeService.processSettings(tmpSettings);
@@ -155,11 +157,16 @@ public class Node implements Releasable {
             throw new IllegalStateException("Failed to created node environment", ex);
         }
 
+        //初始化es自己的线程池
         final ThreadPool threadPool = new ThreadPool(settings);
 
         boolean success = false;
         try {
+            // 这里使用了Guice的Injector进行注入与获取实例
             ModulesBuilder modules = new ModulesBuilder();
+            // elasticsearch里面的组件基本都是用上面的方式进行模块化管理，elasticsearch对guice进行了封装，
+            // 通过ModulesBuilder类构建es的模块，一个es节点包括下面模块：
+            // 可以看到每个module里面都有一个方法configure()用于将对象和实现类作绑定。
             modules.add(new Version.Module(version));
             modules.add(new CircuitBreakerModule(settings));
             // plugin modules must be added here, before others or we can get crazy injection errors...
@@ -199,6 +206,7 @@ public class Node implements Releasable {
 
             injector = modules.createInjector();
 
+            // 实例化client
             client = injector.getInstance(Client.class);
             threadPool.setNodeSettingsService(injector.getInstance(NodeSettingsService.class));
             success = true;
@@ -229,6 +237,7 @@ public class Node implements Releasable {
     /**
      * Start the node. If the node is already started, this method is no-op.
      */
+    // Node的启动
     public Node start() {
         if (!lifecycle.moveToStarted()) {
             return this;
@@ -237,6 +246,7 @@ public class Node implements Releasable {
         ESLogger logger = Loggers.getLogger(Node.class, settings.get("name"));
         logger.info("starting ...");
         // hack around dependency injection problem (for now...)
+        // Node的启动其实就是node里每个组件的启动，同样的，分别调用不同的实例的start方法来启动这个组件,如下：
         injector.getInstance(Discovery.class).setRoutingService(injector.getInstance(RoutingService.class));
         for (Class<? extends LifecycleComponent> plugin : pluginsService.nodeServices()) {
             injector.getInstance(plugin).start();
@@ -272,6 +282,7 @@ public class Node implements Releasable {
         injector.getInstance(TribeService.class).start();
 
         logger.info("started");
+        // 到目前为止，整个ES的启动就已经完成！
 
         return this;
     }

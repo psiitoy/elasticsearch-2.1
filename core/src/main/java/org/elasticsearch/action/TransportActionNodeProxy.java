@@ -48,6 +48,7 @@ public class TransportActionNodeProxy<Request extends ActionRequest, Response ex
             listener.onFailure(validationException);
             return;
         }
+        // 通过netty的channel将数据写入
         transportService.sendRequest(node, action.name(), request, transportOptions, new ActionListenerResponseHandler<Response>(listener) {
             @Override
             public Response newInstance() {

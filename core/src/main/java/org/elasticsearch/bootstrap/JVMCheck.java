@@ -114,6 +114,7 @@ final class JVMCheck {
     static void check() {
         if (Boolean.parseBoolean(System.getProperty(JVM_BYPASS))) {
             Loggers.getLogger(JVMCheck.class).warn("bypassing jvm version check for version [{}], this can result in data corruption!", fullVersion());
+            //如果是Oracle的，以下几个编译方案时可能影响ES：
         } else if ("Oracle Corporation".equals(Constants.JVM_VENDOR)) {
             HotspotBug bug = JVM_BROKEN_HOTSPOT_VERSIONS.get(Constants.JVM_VERSION);
             if (bug != null) {
@@ -123,6 +124,7 @@ final class JVMCheck {
                     throw new RuntimeException(bug.getErrorMessage());
                 }
             }
+            //如果是IBM的，对版本比较会有要求，要求版本必须大于2.8，不然可能会导致index损坏。
         } else if ("IBM Corporation".equals(Constants.JVM_VENDOR)) {
             // currently some old JVM versions from IBM will easily result in index corruption.
             // 2.8+ seems ok for ES from testing.

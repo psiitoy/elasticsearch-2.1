@@ -83,11 +83,14 @@ public class TransportClientNodesService extends AbstractComponent {
     private final Headers headers;
 
     // nodes that are added to be discovered
+    // client初始化时addTransportAddress配置的node(代表配置文件中主动加入的节点)
     private volatile List<DiscoveryNode> listedNodes = Collections.emptyList();
 
     private final Object mutex = new Object();
 
+    // 和服务端建立的node(代表参与请求的节点)
     private volatile List<DiscoveryNode> nodes = Collections.emptyList();
+    // 没有建立连接的node(过滤掉的不能进行请求处理的节点)
     private volatile List<DiscoveryNode> filteredNodes = Collections.emptyList();
 
     private final AtomicInteger tempNodeIdGenerator = new AtomicInteger();
@@ -120,11 +123,36 @@ public class TransportClientNodesService extends AbstractComponent {
             logger.debug("node_sampler_interval[" + nodesSamplerInterval + "]");
         }
 
+        // 设置嗅探器类型
         if (this.settings.getAsBoolean("client.transport.sniff", false)) {
+            // 嗅探同一集群中的所有节点
+            /**
+             * 我们先来看看SniffNodesSampler，这意味着client会主动发现集群里的其他节点；
+             * 在sample中client会去ping listedNodes和nodes中所有节点，默认ping的interval为5s；
+             * 如果ping的node在nodes list里面，意味着是要真正建立连接的node，则创建fully connct；
+             * 如果不在则创建light connect。(这里的light是指只创建ping连接，fully则会创建前一篇文章所说的那五种连接)。
+             * 然后对这些node发送一个获取其state的请求，获取集群所有的dataNodes，对这些nodes经过再次确认后就放入nodes中。
+             */
             this.nodesSampler = new SniffNodesSampler();
         } else {
+            // 只关注配置文件配置的节点
+            // SimpleNodeSampler：ping listedNodes中的所有node，区别在于这里创建的都是light connect；
+            /**
+             * 同样是ping listedNodes中的所有node，区别在于这里创建的都是light connect
+             * 对这些node发送一个TransportLivenessAction的请求，这个请求会返回一个自发现的node info
+             * 把这个返回结果中真实的node加入nodes，如果返回时空，仍然会加入nodes，因为可能目标node还没有完成初始化还获取不到信息。
+             */
             this.nodesSampler = new SimpleNodeSampler();
         }
+        /**
+         * 以上sampler
+         * 可以看到两者的最大不同之处在于nodes列表里面的node,
+         * 也就是SimpleNodeSampler让集群中的某些个配置的节点，专门用于接受用户请求。SniffNodesSampler的话，所有节点都会参与负载。
+         */
+        /**
+         * 那么发送数据的时候会选择哪一个呢？其实都在execute方法里面： 随即轮询
+         * 其实关键的就一句话DiscoveryNode node = nodes.get((index) % nodes.size());通过Round robin来生成发送的node，以达到负载均衡的效果。
+         */
         this.nodesSamplerFuture = threadPool.schedule(nodesSamplerInterval, ThreadPool.Names.GENERIC, new ScheduledNodeSampler());
     }
 
@@ -205,8 +233,10 @@ public class TransportClientNodesService extends AbstractComponent {
     public <Response> void execute(NodeListenerCallback<Response> callback, ActionListener<Response> listener) {
         List<DiscoveryNode> nodes = this.nodes;
         ensureNodesAreAvailable(nodes);
+        // auto_increment round-robbin
         int index = getNodeNumber();
         RetryListener<Response> retryListener = new RetryListener<>(callback, listener, nodes, index);
+        // Client做负载均衡 nodes.get((index + 0) % nodes.size());
         DiscoveryNode node = nodes.get((index) % nodes.size());
         try {
             callback.doWithNode(node, retryListener);
@@ -429,6 +459,8 @@ public class TransportClientNodesService extends AbstractComponent {
                                     return;
                                 }
                             }
+                            //核心是在这里，刚刚开始初始化的时候，可能只有配置的一个节点，这个时候会通过这个地址发送一个state状态监测
+                            //"cluster:monitor/state"
                             transportService.sendRequest(listedNode, ClusterStateAction.NAME,
                                     headers.applyTo(Requests.clusterStateRequest().clear().nodes(true).local(true)),
                                     TransportRequestOptions.options().withType(TransportRequestOptions.Type.STATE).withTimeout(pingTimeout),
@@ -480,6 +512,7 @@ public class TransportClientNodesService extends AbstractComponent {
                     newFilteredNodes.add(entry.getKey());
                     continue;
                 }
+                //接下来在这个地方拿到所有的data nodes 写入到nodes节点里边
                 for (ObjectCursor<DiscoveryNode> cursor : entry.getValue().getState().nodes().dataNodes().values()) {
                     newNodes.add(cursor.value);
                 }

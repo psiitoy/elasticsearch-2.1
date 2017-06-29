@@ -57,6 +57,7 @@ final class Bootstrap {
 
     private volatile Node node;
     private final CountDownLatch keepAliveLatch = new CountDownLatch(1);
+    //keepAliveThread 其实这个线程相当于一个heartbeat，用以来表示ES进程是否还活着
     private final Thread keepAliveThread;
 
     /** creates a new instance */
@@ -65,6 +66,7 @@ final class Bootstrap {
             @Override
             public void run() {
                 try {
+                    //线程启动之后就进入到await状态
                     keepAliveLatch.await();
                 } catch (InterruptedException e) {
                     // bail out
@@ -73,6 +75,7 @@ final class Bootstrap {
         }, "elasticsearch[keepAlive/" + Version.CURRENT + "]");
         keepAliveThread.setDaemon(false);
         // keep this thread alive (non daemon thread) until we shutdown
+        // 在程序退出时触发该Hook（注：退出是指ctrl+c或者kill -15，但如果用kill -9 那是没办法的），在该Hook中会对之前的线程做countDown操作
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
@@ -86,6 +89,7 @@ final class Bootstrap {
         final ESLogger logger = Loggers.getLogger(Bootstrap.class);
         
         // check if the user is running as root, and bail
+        // 检查其他的一些外部资源；首先不能用root启动ES，否则就会强制关闭
         if (Natives.definitelyRunningAsRoot()) {
             if (Boolean.parseBoolean(System.getProperty("es.insecure.allow.root"))) {
                 logger.warn("running as ROOT user. this is a bad idea!");
@@ -141,14 +145,19 @@ final class Bootstrap {
     }
 
     private void setup(boolean addShutdownHook, Settings settings, Environment environment) throws Exception {
+        // 对于mlockall的配置我们其实是建议设为true的，因为这样可以保障ES不会去占用其他系统的内存、swap等资源。
+        // 强烈建议把bootstrap.mlockall设为true，这个值设为true，可能会让节点启动的时候比较慢，但是保证了节点加入集群后的稳定性。
+        // 在5.x版本中，已经改成了bootstrap.memory_lock
         initializeNatives(environment.tmpFile(),
                           settings.getAsBoolean("bootstrap.mlockall", false),
                           settings.getAsBoolean("bootstrap.seccomp", true),
                           settings.getAsBoolean("bootstrap.ctrlhandler", true));
 
         // initialize probes before the security manager is installed
+        // 初始化两种probes，分别是ProcessProbe和Osprobe，这两个probe将会提供给ES的stats api所需要的一些ES进程和OS层面的信息
         initializeProbes();
 
+        //增加shutdown的hook，当集群shutdown的时候，会主动调用node的close方法，即让本node安全退出。
         if (addShutdownHook) {
             Runtime.getRuntime().addShutdownHook(new Thread() {
                 @Override
@@ -169,12 +178,15 @@ final class Bootstrap {
         // We do not need to reload system properties here as we have already applied them in building the settings and
         // reloading could cause multiple prompts to the user for values if a system property was specified with a prompt
         // placeholder
+        // 接下来才是对于node的配置的初始化，这部分的配置来自配置文件
         Settings nodeSettings = Settings.settingsBuilder()
                 .put(settings)
                 .put(InternalSettingsPreparer.IGNORE_SYSTEM_PROPERTIES_SETTING, true)
                 .build();
 
+        // 通过nodeSettings创建nodeBuilder
         NodeBuilder nodeBuilder = NodeBuilder.nodeBuilder().settings(nodeSettings);
+        // 而node的初始化就是通过nodeSettings来创建的
         node = nodeBuilder.build();
     }
     
@@ -234,6 +246,7 @@ final class Bootstrap {
      * This method is invoked by {@link Elasticsearch#main(String[])}
      * to startup elasticsearch.
      */
+    //真正的初始化在Bootstrap的init中，首先是对command的解析，并将参数置于system property中
     static void init(String[] args) throws Throwable {
         // Set the system property before anything has a chance to trigger its use
         System.setProperty("es.logger.prefix", "");
@@ -247,6 +260,7 @@ final class Bootstrap {
 
         INSTANCE = new Bootstrap();
 
+        //从command来判断是不是后台启动，日志的初始化，然后写入pid。
         boolean foreground = !"false".equals(System.getProperty("es.foreground", System.getProperty("es-foreground")));
         // handle the wrapper system property, if its a service, don't run as a service
         if (System.getProperty("wrapper.service", "XXX").equalsIgnoreCase("true")) {
@@ -268,6 +282,7 @@ final class Bootstrap {
         }
 
         // warn if running using the client VM
+        // 获取JVM信息，如果是使用client vm则会给出提示 （建议使用server vm，毕竟ES需要很大的资源，可以用-server来强制使用server vm）
         if (JvmInfo.jvmInfo().getVmName().toLowerCase(Locale.ROOT).contains("client")) {
             ESLogger logger = Loggers.getLogger(Bootstrap.class);
             logger.warn("jvm uses the client vm, make sure to run `java` with the server vm for best performance by adding `-server` to the command line");
@@ -280,6 +295,7 @@ final class Bootstrap {
             }
 
             // fail if using broken version
+            // 默认是开启jvm 版本检查的，如果不检查可能会导致es数据的损坏。针对不同公司的jvm vendor会有不同的处理方式，
             JVMCheck.check();
 
             INSTANCE.setup(true, settings, environment);
