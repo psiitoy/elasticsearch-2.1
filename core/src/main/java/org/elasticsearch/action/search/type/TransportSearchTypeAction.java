@@ -141,11 +141,12 @@ public abstract class TransportSearchTypeAction extends TransportAction<SearchRe
                 return;
             }
             int shardIndex = -1;
+            //循环遍历所有shard
             for (final ShardIterator shardIt : shardsIts) {
                 shardIndex++;
                 final ShardRouting shard = shardIt.nextOrNull();
                 if (shard != null) {
-                    performFirstPhase(shardIndex, shardIt, shard);
+                    performFirstPhase(shardIndex, shardIt, shard);  //执行第一阶段
                 } else {
                     // really, no shards active in this group
                     onFirstPhaseResult(shardIndex, null, null, shardIt, new NoShardAvailableActionException(shardIt.shardId()));

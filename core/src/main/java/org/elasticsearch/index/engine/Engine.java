@@ -246,7 +246,7 @@ public abstract class Engine implements Closeable {
     }
 
     final protected GetResult getFromSearcher(Get get) throws EngineException {
-        final Searcher searcher = acquireSearcher("get");
+        final Searcher searcher = acquireSearcher("get");        //获取Searcher
         final Versions.DocIdAndVersion docIdAndVersion;
         try {
             docIdAndVersion = Versions.loadDocIdAndVersion(searcher.reader(), get.uid());

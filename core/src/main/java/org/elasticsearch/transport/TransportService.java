@@ -282,6 +282,7 @@ public class TransportService extends AbstractLifecycleComponent<TransportServic
         sendRequest(node, action, request, TransportRequestOptions.EMPTY, handler);
     }
 
+    //listener封装进了handler
     public <T extends TransportResponse> void sendRequest(final DiscoveryNode node, final String action, final TransportRequest request,
                                                           final TransportRequestOptions options, TransportResponseHandler<T> handler) {
         if (node == null) {
@@ -334,20 +335,21 @@ public class TransportService extends AbstractLifecycleComponent<TransportServic
     private void sendLocalRequest(long requestId, final String action, final TransportRequest request) {
         final DirectResponseChannel channel = new DirectResponseChannel(logger, localNode, action, requestId, adapter, threadPool);
         try {
-            final RequestHandlerRegistry reg = adapter.getRequestHandler(action);
+            final RequestHandlerRegistry reg = adapter.getRequestHandler(action); //获取对应的action的处理器
             if (reg == null) {
                 throw new ActionNotFoundTransportException("Action [" + action + "] not found");
             }
             final String executor = reg.getExecutor();
             if (ThreadPool.Names.SAME.equals(executor)) {
                 //noinspection unchecked
-                reg.getHandler().messageReceived(request, channel);
+                reg.getHandler().messageReceived(request, channel); //reg.handler 是内部匿名类 ActionListenerResponseHandler
             } else {
                 threadPool.executor(executor).execute(new AbstractRunnable() {
                     @Override
                     protected void doRun() throws Exception {
                         //noinspection unchecked
-                        reg.getHandler().messageReceived(request, channel);
+                        TransportRequestHandler handler = reg.getHandler();
+                        handler.messageReceived(request, channel); //使用处理器处理请求
                     }
 
                     @Override
@@ -434,6 +436,11 @@ public class TransportService extends AbstractLifecycleComponent<TransportServic
         registerRequestHandler(reg);
     }
 
+    /**
+     * 注册请求处理器
+     * @param reg
+     * @param <Request>
+     */
     protected <Request extends TransportRequest> void registerRequestHandler(RequestHandlerRegistry<Request> reg) {
         synchronized (requestHandlerMutex) {
             RequestHandlerRegistry replaced = requestHandlers.get(reg.getAction());
@@ -761,7 +768,7 @@ public class TransportService extends AbstractLifecycleComponent<TransportServic
 
         @Override
         public void sendResponse(final TransportResponse response, TransportResponseOptions options) throws IOException {
-            final TransportResponseHandler handler = adapter.onResponseReceived(requestId);
+            final TransportResponseHandler handler = adapter.onResponseReceived(requestId);  //获取处理器
             // ignore if its null, the adapter logs it
             if (handler != null) {
                 final String executor = handler.executor();
@@ -782,7 +789,7 @@ public class TransportService extends AbstractLifecycleComponent<TransportServic
         @SuppressWarnings("unchecked")
         protected void processResponse(TransportResponseHandler handler, TransportResponse response) {
             try {
-                handler.handleResponse(response);
+                handler.handleResponse(response);   //使用处理器响应请求
             } catch (Throwable e) {
                 processException(handler, wrapInRemote(new ResponseHandlerFailureTransportException(e)));
             }

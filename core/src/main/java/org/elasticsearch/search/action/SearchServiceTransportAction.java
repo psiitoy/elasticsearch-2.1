@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.action;
 
+import com.alibaba.fastjson.JSON;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionListenerResponseHandler;
 import org.elasticsearch.action.IndicesRequest;
@@ -365,7 +366,9 @@ public class SearchServiceTransportAction extends AbstractComponent {
     class SearchQueryTransportHandler implements TransportRequestHandler<ShardSearchTransportRequest> {
         @Override
         public void messageReceived(ShardSearchTransportRequest request, TransportChannel channel) throws Exception {
-            QuerySearchResultProvider result = searchService.executeQueryPhase(request);
+            QuerySearchResultProvider result = searchService.executeQueryPhase(request);//获取topDocs
+            QuerySearchResult result1 = (QuerySearchResult) result;
+            System.out.println("### 获取到了topDocs="+ JSON.toJSONString(result1.topDocs())+","+JSON.toJSONString(result1.shardTarget()));
             channel.sendResponse(result);
         }
     }

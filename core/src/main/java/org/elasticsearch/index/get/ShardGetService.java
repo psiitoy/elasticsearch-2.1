@@ -367,7 +367,7 @@ public final class ShardGetService extends AbstractIndexShardComponent {
                         leafSearchLookup.setDocument(docIdAndVersion.docId);
                     }
 
-                    List<Object> values = searchLookup.source().extractRawValues(field);
+                    List<Object> values = searchLookup.source().extractRawValues(field);//提取源生值的list (string, int。。。)
                     if (!values.isEmpty()) {
                         for (int i = 0; i < values.size(); i++) {
                             values.set(i, fieldMapper.fieldType().valueForSearch(values.get(i)));

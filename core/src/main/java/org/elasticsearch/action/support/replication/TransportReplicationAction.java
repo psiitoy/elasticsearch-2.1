@@ -213,6 +213,7 @@ public abstract class TransportReplicationAction<Request extends ReplicationRequ
     class OperationTransportHandler implements TransportRequestHandler<Request> {
         @Override
         public void messageReceived(final Request request, final TransportChannel channel) throws Exception {
+            //调用Transport的execute方法，通过channel返回结果
             execute(request, new ActionListener<Response>() {
                 @Override
                 public void onResponse(Response result) {

@@ -104,6 +104,8 @@ final class Bootstrap {
         }
         
         // mlockall if requested
+        // 尝试锁定内存
+        // 尝试锁定内存左右是保证节点运行期间的内存不变动，以防因为内存变得带来性能上的波动，这里调用的是c方法。
         if (mlockAll) {
             if (Constants.WINDOWS) {
                Natives.tryVirtualLock();
