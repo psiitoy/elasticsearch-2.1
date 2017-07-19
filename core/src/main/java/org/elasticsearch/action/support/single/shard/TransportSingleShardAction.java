@@ -68,6 +68,7 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
         this.executor = executor;
 
         if (!isSubAction()) {
+            //multi的 TransportShardMultiGetAction、TransportShardMultiPercolateAction、TransportShardMultiTermsVectorAction 都不注册这个
             transportService.registerRequestHandler(actionName, request, ThreadPool.Names.SAME, new TransportHandler());
         }
         transportService.registerRequestHandler(transportShardAction, request, executor, new ShardTransportHandler());
@@ -123,17 +124,21 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
         private AsyncSingleAction(Request request, ActionListener<Response> listener) {
             this.listener = listener;
 
+            //当前集群状态
             ClusterState clusterState = clusterService.state();
             if (logger.isTraceEnabled()) {
                 logger.trace("executing [{}] based on cluster state version [{}]", request, clusterState.version());
             }
+            //当前集群的节点信息。
             nodes = clusterState.nodes();
+            //检测是否需要hold (不允许读)
             ClusterBlockException blockException = checkGlobalBlock(clusterState);
             if (blockException != null) {
                 throw blockException;
             }
 
             String concreteSingleIndex;
+            //如果需要解析index
             if (resolveIndex(request)) {
                 concreteSingleIndex = indexNameExpressionResolver.concreteSingleIndex(clusterState, request);
             } else {

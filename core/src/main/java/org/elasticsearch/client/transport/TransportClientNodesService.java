@@ -235,10 +235,10 @@ public class TransportClientNodesService extends AbstractComponent {
         ensureNodesAreAvailable(nodes);
         // auto_increment round-robbin
         int index = getNodeNumber();
-        RetryListener<Response> retryListener = new RetryListener<>(callback, listener, nodes, index);
-        // Client做负载均衡 nodes.get((index + 0) % nodes.size());
-        DiscoveryNode node = nodes.get((index) % nodes.size());
-        try {
+            RetryListener<Response> retryListener = new RetryListener<>(callback, listener, nodes, index);
+            // Client做负载均衡 nodes.get((index + 0) % nodes.size());
+            DiscoveryNode node = nodes.get((index) % nodes.size());
+            try {
             callback.doWithNode(node, retryListener);
         } catch (Throwable t) {
             //this exception can't come from the TransportService as it doesn't throw exception at all

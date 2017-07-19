@@ -342,6 +342,7 @@ public abstract class AbstractClient extends AbstractComponent implements Client
      */
     @Override
     public final <Request extends ActionRequest, Response extends ActionResponse, RequestBuilder extends ActionRequestBuilder<Request, Response, RequestBuilder>> void execute(Action<Request, Response, RequestBuilder> action, Request request, ActionListener<Response> listener) {
+        //把请求头加入request参数
         headers.applyTo(request);
         listener = threadedWrapper.wrap(listener);
         doExecute(action, request, listener);
