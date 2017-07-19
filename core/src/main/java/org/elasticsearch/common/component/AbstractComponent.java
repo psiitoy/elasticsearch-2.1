@@ -70,4 +70,25 @@ public abstract class AbstractComponent {
             deprecationLogger.deprecated("Setting [{}] has been removed, use [{}] instead", settingName, alternativeName);
         }
     }
+
+    public static final ThreadLocal<String> traceId = new ThreadLocal<>();
+
+    protected void logTrace(LogActionType type, String msg, Object... params) {
+        //获取上一层类名 和 方法名
+        StackTraceElement ste = Thread.currentThread().getStackTrace()[2];
+        String clzName = ste.getClassName();
+        String methodName = ste.getMethodName();
+        int lineNum = ste.getLineNumber();
+        if (traceId.get() == null) {
+            traceId.set(String.valueOf(System.currentTimeMillis()));
+        }
+        String baseInfo = "###[ActionType]" + type + "[TraceId]" + traceId.get() + "[Clz]" + clzName + "[Mtd]" + methodName + "[Line]" + lineNum + "[msg]" + msg;
+        logger.info(baseInfo, params);
+    }
+
+    protected enum LogActionType {
+
+        GET, SEARCH, SINGLE_SHARD;
+
+    }
 }

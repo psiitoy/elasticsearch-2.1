@@ -40,4 +40,4 @@ html_docs
 backwards/
 
 
-core/plugins/
+#core/plugins/

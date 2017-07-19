@@ -19,6 +19,8 @@
 
 package org.elasticsearch.action;
 
+import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
@@ -36,13 +38,23 @@ public class TransportActionNodeProxy<Request extends ActionRequest, Response ex
 
     @Inject
     public TransportActionNodeProxy(Settings settings, GenericAction<Request, Response> action, TransportService transportService) {
+        // 日志初始化(从setting中获取日志配置相关信息) 赋值setting
         super(settings);
+        // 请求名字
         this.action = action;
+        // 传输器
         this.transportService = transportService;
+        // 请求类型+是否压缩+超时时间 配置
         this.transportOptions = action.transportOptions(settings);
     }
 
+    //代理的行为
     public void execute(final DiscoveryNode node, final Request request, final ActionListener<Response> listener) {
+        /**
+         * 请求校验(匿名内部类)
+         * @see GetRequest#validate(),SearchRequest#validate()
+         *
+         */
         ActionRequestValidationException validationException = request.validate();
         if (validationException != null) {
             listener.onFailure(validationException);

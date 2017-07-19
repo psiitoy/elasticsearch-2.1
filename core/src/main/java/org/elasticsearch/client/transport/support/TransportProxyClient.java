@@ -36,6 +36,9 @@ import java.util.Map;
 public class TransportProxyClient {
 
     private final TransportClientNodesService nodesService;
+    /**
+     * 根据请求类型选择请求代理
+     */
     private final ImmutableMap<Action, TransportActionNodeProxy> proxies;
 
     @Inject
@@ -47,10 +50,12 @@ public class TransportProxyClient {
                 actionsBuilder.put((Action) action, new TransportActionNodeProxy(settings, action, transportService));
             }
         }
+        //proxies 赋值完成
         this.proxies = actionsBuilder.immutableMap();
     }
 
     public <Request extends ActionRequest, Response extends ActionResponse, RequestBuilder extends ActionRequestBuilder<Request, Response, RequestBuilder>> void execute(final Action<Request, Response, RequestBuilder> action, final Request request, ActionListener<Response> listener) {
+        //找到对应的 TransportActionNodeProxy
         final TransportActionNodeProxy<Request, Response> proxy = proxies.get(action);
         nodesService.execute(new TransportClientNodesService.NodeListenerCallback<Response>() {
             @Override

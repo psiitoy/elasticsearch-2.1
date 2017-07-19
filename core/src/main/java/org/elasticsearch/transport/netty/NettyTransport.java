@@ -779,21 +779,21 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
 
     @Override
     public void sendRequest(final DiscoveryNode node, final long requestId, final String action, final TransportRequest request, TransportRequestOptions options) throws IOException, TransportException {
-
-        // 拿到一个连接
-        Channel targetChannel = nodeChannel(node, options);
+        //参数说明：node发送的目的节点，requestId请求id，action action名称，request请求，options包括以下几种操作 RECOVERY,BULK,REG,STATE,PING;
+        Channel targetChannel = nodeChannel(node, options);//获取对应节点的channel，channel在连接节点时初始化完成（请参考上一篇）
 
         if (compress) {
             options.withCompress(true);
         }
 
         byte status = 0;
+        //设置status 包括以下几种STATUS_REQRES = 1 << 0; STATUS_ERROR = 1 << 1; STATUS_COMPRESS = 1 << 2;
         status = TransportStatus.setRequest(status);
 
-        ReleasableBytesStreamOutput bStream = new ReleasableBytesStreamOutput(bigArrays);
+        ReleasableBytesStreamOutput bStream = new ReleasableBytesStreamOutput(bigArrays);//初始写出流
         boolean addedReleaseListener = false;
         try {
-            bStream.skip(NettyHeader.HEADER_SIZE);
+            bStream.skip(NettyHeader.HEADER_SIZE);//留出message header的位置
             StreamOutput stream = bStream;
             // only compress if asked, and, the request is not bytes, since then only
             // the header part is compressed, and the "body" can't be extracted as compressed
@@ -830,14 +830,24 @@ public class NettyTransport extends AbstractLifecycleComponent<Transport> implem
                 bytes = bStream.bytes();
                 buffer = bytes.toChannelBuffer();
             }
-            NettyHeader.writeHeader(buffer, requestId, status, version);
+            NettyHeader.writeHeader(buffer, requestId, status, version);//写信息头
 
             // 通过拿到的连接写数据
-            ChannelFuture future = targetChannel.write(buffer);
+            ChannelFuture future = targetChannel.write(buffer);//写buffer同时获取future，发送信息发生在这里
             ReleaseChannelFutureListener listener = new ReleaseChannelFutureListener(bytes);
-            future.addListener(listener);
+            future.addListener(listener);//添加listener
             addedReleaseListener = true;
             transportServiceAdapter.onRequestSent(node, requestId, action, request, options);
+            /**
+             * 以上就是request的发送过程，获取目标node的channel封装请求写入信息头，然后发送并使用listener监听，
+             * 这里transportRequest是一个抽象类，它继承了TransportMessage同时实现了streamable接口。
+             * cluster中对它的实现非常多，各个功能都有相应的request，这里就不一一列举，后面的代码分析中会时常涉及。
+             */
+            /**
+             * request发送只是transport的一部分功能，有发送就要有接收，这样transport的功能才完整。
+             * 接下来就是对接收过程的分析。上一篇中简单介绍过netty的使用，message的处理是通过MessageHandler处理，
+             * 因此nettyTransport的信息处理逻辑都在MessageChannelHandler的messageReceived（）方法中
+             */
         } finally {
             if (!addedReleaseListener) {
                 Releasables.close(bStream.bytes());

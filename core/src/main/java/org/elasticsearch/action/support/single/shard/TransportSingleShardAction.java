@@ -85,7 +85,9 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
 
     @Override
     protected void doExecute(Request request, ActionListener<Response> listener) {
+        logTrace(LogActionType.SINGLE_SHARD,"doExecute begin request={},listener={}", request, listener);
         new AsyncSingleAction(request, listener).start();
+        logTrace(LogActionType.SINGLE_SHARD,"doExecute end request={},listener={}", request, listener);
     }
 
     protected abstract Response shardOperation(Request request, ShardId shardId);
@@ -171,7 +173,9 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
 
                     @Override
                     public void handleResponse(final Response response) {
+                        logTrace(LogActionType.SINGLE_SHARD,"handleResponse begin response={}", response);
                         listener.onResponse(response);
+                        logTrace(LogActionType.SINGLE_SHARD,"handleResponse end response={}", response);
                     }
 
                     @Override
@@ -284,8 +288,10 @@ public abstract class TransportSingleShardAction<Request extends SingleShardRequ
             if (logger.isTraceEnabled()) {
                 logger.trace("executing [{}] on shard [{}]", request, request.internalShardId);
             }
+            logTrace(LogActionType.SINGLE_SHARD,"messageReceived begin request={},channel={}", request, channel);
             Response response = shardOperation(request, request.internalShardId);
             channel.sendResponse(response);
+            logTrace(LogActionType.SINGLE_SHARD,"messageReceived end request={},channel={}", request, channel);
         }
     }
 

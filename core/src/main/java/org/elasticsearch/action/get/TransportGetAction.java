@@ -91,6 +91,7 @@ public class TransportGetAction extends TransportSingleShardAction<GetRequest, G
 
     @Override
     protected GetResponse shardOperation(GetRequest request, ShardId shardId) {
+        logTrace(LogActionType.GET,"shardOperation begin request={},shardId={}", request, shardId);
         IndexService indexService = indicesService.indexServiceSafe(shardId.getIndex());
         IndexShard indexShard = indexService.shardSafe(shardId.id());
 
@@ -100,7 +101,9 @@ public class TransportGetAction extends TransportSingleShardAction<GetRequest, G
 
         GetResult result = indexShard.getService().get(request.type(), request.id(), request.fields(),
                 request.realtime(), request.version(), request.versionType(), request.fetchSourceContext(), request.ignoreErrorsOnGeneratedFields());
-        return new GetResponse(result);
+        GetResponse response = new GetResponse(result);
+        logTrace(LogActionType.GET,"shardOperation end request={},shardId={},result,={},response={}", request, shardId, result, response);
+        return response;
     }
 
     @Override
